@@ -83,6 +83,7 @@
             this.lstCliBoard.Location = new System.Drawing.Point(0, 0);
             this.lstCliBoard.MultiSelect = false;
             this.lstCliBoard.Name = "lstCliBoard";
+            this.lstCliBoard.ShowItemToolTips = true;
             this.lstCliBoard.Size = new System.Drawing.Size(391, 448);
             this.lstCliBoard.TabIndex = 1;
             this.lstCliBoard.UseCompatibleStateImageBehavior = false;
@@ -93,6 +94,10 @@
             // 
             this.columnHeader1.Text = "Texto";
             this.columnHeader1.Width = 350;
+            // 
+            // toolTip1
+            // 
+            this.toolTip1.IsBalloon = true;
             // 
             // FrmMain
             // 

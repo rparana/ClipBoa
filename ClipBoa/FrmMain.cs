@@ -1,4 +1,7 @@
-﻿using System;
+﻿using ClipBoa.Data;
+using ClipBoa.Model;
+using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -14,6 +17,14 @@ namespace ClipBoa
 {
     public partial class FrmMain : Form
     {
+        const int MYACTION_HOTKEY_ID = 6;
+
+        // DLL libraries used to manage hotkeys
+        [DllImport("user32.dll")]
+        public static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vlc);
+        [DllImport("user32.dll")]
+        public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
         [DllImport("User32.dll")]
         protected static extern int SetClipboardViewer(int hWndNewViewer);
 
@@ -26,6 +37,7 @@ namespace ClipBoa
         private string TextoAtual { get; set; }
         private string TxtFile { get; set; }
         private bool IsSelected { get; set; }
+        private bool Fechar { get; set; }
 
         //private Clipboard;
 
@@ -34,6 +46,8 @@ namespace ClipBoa
 
         public FrmMain()
         {
+            RegisterHotKey(this.Handle, MYACTION_HOTKEY_ID, 6, (int)Keys.R);
+            Fechar = false;
             string[] args = Environment.GetCommandLineArgs();
 
             int arg = 0;
@@ -58,7 +72,7 @@ namespace ClipBoa
 
         private void FrmMain_Load(object sender, EventArgs e)
         {
-            notifyIcon1.ShowBalloonTip(1);
+            //notifyIcon1.ShowBalloonTip(1);
             if (this.WindowState == FormWindowState.Minimized)
                 this.Hide();
         }
@@ -66,8 +80,11 @@ namespace ClipBoa
         // Use this event handler for the FormClosing event.
         private void FrmMain_FormClosing(object sender, FormClosingEventArgs e)
         {
-            this.Hide();
-            e.Cancel = true; // this cancels the close event.
+            if (!Fechar)
+            {
+                this.Hide();
+                e.Cancel = true; // this cancels the close event.
+            }
         }
 
         private void StartText()
@@ -76,29 +93,48 @@ namespace ClipBoa
             string line;
             try
             {
-                //Pass the file path and file name to the StreamReader constructor
-                if (!File.Exists(TxtFile))
+                using (DataContext db = new DataContext())
                 {
-                    File.Create(TxtFile);
-                }
-
-                //Continue to read until you reach end of file
-                using (var reader = new StreamReader(TxtFile))
-                {
-                    while (!reader.EndOfStream)
+                    var dados = (from t in db.TransferTexties select t).OrderByDescending(c => c.ID);
+                    if (dados!=null)
                     {
-                        line = reader.ReadLine();
-                        lstCliBoard.Items.Insert(lstCliBoard.Items.Count, new ListViewItem(line));
-                        if (firstLine)
+                        foreach(TransferText t in dados)
                         {
-                            TextoAtual = line;
-                            firstLine = false;
+                            ListViewItem iListView = new ListViewItem(t.Texto);
+
+                            iListView.ToolTipText = t.Texto.Replace("\r\n", "\n");
+                            lstCliBoard.Items.Insert(lstCliBoard.Items.Count, iListView);
+                            if (firstLine)
+                            {
+                                TextoAtual = t.Texto;
+                                firstLine = false;
+                            }
                         }
                     }
+                    }
+                ////Pass the file path and file name to the StreamReader constructor
+                //if (!File.Exists(TxtFile))
+                //{
+                //    File.Create(TxtFile);
+                //}
 
-                }
+                ////Continue to read until you reach end of file
+                //using (var reader = new StreamReader(TxtFile))
+                //{
+                //    while (!reader.EndOfStream)
+                //    {
+                //        line = reader.ReadLine();
+                //        lstCliBoard.Items.Insert(lstCliBoard.Items.Count, new ListViewItem(line));
+                //        if (firstLine)
+                //        {
+                //            TextoAtual = line;
+                //            firstLine = false;
+                //        }
+                //    }
 
-                //close the file
+                //}
+
+                ////close the file
                 
             }
             catch (Exception e)
@@ -123,6 +159,7 @@ namespace ClipBoa
 
         private void fecharToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            Fechar = true;
             Application.Exit();
         }
 
@@ -135,6 +172,7 @@ namespace ClipBoa
         {
 
             // defined in winuser.h
+            const int WM_HOTKEY = 0x0312;
             const int WM_DRAWCLIPBOARD = 0x308;
             const int WM_CHANGECBCHAIN = 0x030D;
 
@@ -152,7 +190,14 @@ namespace ClipBoa
                     else
                         SendMessage(nextClipboardViewer, m.Msg, m.WParam, m.LParam);
                     break;
-
+                case WM_HOTKEY:
+                    if (m.WParam.ToInt32() == MYACTION_HOTKEY_ID)
+                    {
+                        this.Show();
+                        this.WindowState = FormWindowState.Normal;
+                    }
+                    base.WndProc(ref m);
+                    break;
                 default:
                     base.WndProc(ref m);
                     break;
@@ -178,7 +223,10 @@ namespace ClipBoa
                     if (texto != TextoAtual)
                     {
                         TextoAtual = texto;
-                        lstCliBoard.Items.Insert(0, new ListViewItem(texto));
+                        ListViewItem iListView = new ListViewItem(texto);
+
+                        iListView.ToolTipText = texto.Replace("\r\n", "\n");
+                        lstCliBoard.Items.Insert(0, iListView);
                         WriteNewLine(texto);
                     }
                 }
@@ -191,15 +239,32 @@ namespace ClipBoa
 
         private void WriteNewLine(string txt)
         {
-            string tempfile = Path.GetTempFileName();
-            using (var writer = new StreamWriter(tempfile))
-            using (var reader = new StreamReader(TxtFile))
+            try
             {
-                writer.WriteLine(txt);
-                while (!reader.EndOfStream)
-                    writer.WriteLine(reader.ReadLine());
+                if (!String.IsNullOrEmpty(txt))
+                {
+                    using (DataContext db = new DataContext())
+                    {
+                        TransferText text = new TransferText() { Texto = txt };
+                        db.TransferTexties.Add(text);
+                        db.SaveChanges();
+                    }
+                }
             }
-            File.Copy(tempfile, TxtFile, true);
+            catch (Exception e)
+            {
+                MessageBox.Show("Exception: " + e.Message);
+            }
+
+            //string tempfile = Path.GetTempFileName();
+            //using (var writer = new StreamWriter(tempfile))
+            //using (var reader = new StreamReader(TxtFile))
+            //{
+            //    writer.WriteLine(txt);
+            //    while (!reader.EndOfStream)
+            //        writer.WriteLine(reader.ReadLine());
+            //}
+            //File.Copy(tempfile, TxtFile, true);
 
         }
 
@@ -216,5 +281,7 @@ namespace ClipBoa
                 }
             }
         }
+
+
     }
 }
