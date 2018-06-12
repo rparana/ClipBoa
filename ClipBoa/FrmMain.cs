@@ -1,11 +1,6 @@
 ﻿using ClipBoa.Data;
 using ClipBoa.Model;
 using System;
-using System.Diagnostics;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -58,7 +53,7 @@ namespace ClipBoa
                     arg = 0;
                 };
             }
-            
+
             if (arg == 1)
                 this.WindowState = FormWindowState.Minimized;
 
@@ -96,9 +91,9 @@ namespace ClipBoa
                 using (DataContext db = new DataContext())
                 {
                     var dados = (from t in db.TransferTexties select t).OrderByDescending(c => c.ID);
-                    if (dados!=null)
+                    if (dados != null)
                     {
-                        foreach(TransferText t in dados)
+                        foreach (TransferText t in dados)
                         {
                             ListViewItem iListView = new ListViewItem(t.Texto);
 
@@ -111,7 +106,7 @@ namespace ClipBoa
                             }
                         }
                     }
-                    }
+                }
                 ////Pass the file path and file name to the StreamReader constructor
                 //if (!File.Exists(TxtFile))
                 //{
@@ -135,7 +130,7 @@ namespace ClipBoa
                 //}
 
                 ////close the file
-                
+
             }
             catch (Exception e)
             {
@@ -180,7 +175,7 @@ namespace ClipBoa
             {
                 case WM_DRAWCLIPBOARD:
                     if (!IsSelected)
-                    DisplayClipboardData();
+                        DisplayClipboardData();
                     SendMessage(nextClipboardViewer, m.Msg, m.WParam, m.LParam);
                     break;
 
@@ -206,18 +201,24 @@ namespace ClipBoa
 
         void DisplayClipboardData()
         {
-
-            string texto ="";
+            
+            TextType type = TextType.Text;
+            string texto = "";
             try
             {
                 IDataObject iData = new DataObject();
                 iData = Clipboard.GetDataObject();
 
                 if (iData.GetDataPresent(DataFormats.Rtf))
-                    texto=(string)iData.GetData(DataFormats.Rtf);
+                {
+                    texto = RichTextStripper.StripRichTextFormat((string)iData.GetData(DataFormats.Rtf));
+                    type = TextType.Rtf;
+                }
                 else if (iData.GetDataPresent(DataFormats.Text))
-                    texto=(string)iData.GetData(DataFormats.Text);
-
+                {
+                    texto = (string)iData.GetData(DataFormats.Text);
+                    type = TextType.Text;
+                }
                 if (!String.IsNullOrEmpty(texto))
                 {
                     if (texto != TextoAtual)
@@ -227,7 +228,7 @@ namespace ClipBoa
 
                         iListView.ToolTipText = texto.Replace("\r\n", "\n");
                         lstCliBoard.Items.Insert(0, iListView);
-                        WriteNewLine(texto);
+                        WriteNewLine(texto, type);
                     }
                 }
             }
@@ -237,15 +238,17 @@ namespace ClipBoa
             }
         }
 
-        private void WriteNewLine(string txt)
+        private void WriteNewLine(string txt, TextType type)
         {
+            string rtfText; //string to save to db
+
             try
             {
                 if (!String.IsNullOrEmpty(txt))
                 {
                     using (DataContext db = new DataContext())
                     {
-                        TransferText text = new TransferText() { Texto = txt };
+                        TransferText text = new TransferText() { Texto = txt, Tipo=type };
                         db.TransferTexties.Add(text);
                         db.SaveChanges();
                     }
@@ -270,9 +273,9 @@ namespace ClipBoa
 
         private void LstClipBoard_SelectedIndexChanged(object sender, EventArgs e)
         {
-            foreach(ListViewItem lvi in lstCliBoard.SelectedItems)
+            foreach (ListViewItem lvi in lstCliBoard.SelectedItems)
             {
-                if(TextoAtual != lvi.Text)
+                if (TextoAtual != lvi.Text)
                 {
                     TextoAtual = lvi.Text;
                     IsSelected = true;

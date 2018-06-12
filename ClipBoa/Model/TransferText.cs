@@ -13,7 +13,9 @@ namespace ClipBoa.Model
     {
         [Key]
         public int ID { get; set; }
+        [Column("Texto", TypeName="ntext")]
         public string Texto { get; set; }
+        public TextType Tipo { get; set; }
 
     }
 }
